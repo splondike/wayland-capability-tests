@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "capability-tests"
+version = "0.1.0"
+description = ""
+authors = ["Stefan Schneider-Kennedy <code@stefansk.name>"]
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.13"
+python-wayland = "^0.6.0"
+dbus-fast = "^3.1.2"
+typer = "^0.15.2"
+
+[tool.poetry.group.dev.dependencies]
+lxml = "^5.3.1"
+requests = "^2.32.3"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+capability-tests = "capability_tests.app:app"

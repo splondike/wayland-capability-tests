@@ -1,0 +1,41 @@
+# List of tests
+
+[[tests]]
+feature = "mouse_move_absolute"
+compositors = ["sway", "hyprland"]
+implementation_requirements = ["wayland_nonstandard"]
+implementation = "test_wlroots.mouse_move_absolute"
+
+[[tests]]
+feature = "mouse_click"
+compositors = ["sway", "hyprland"]
+implementation_requirements = ["wayland_nonstandard"]
+implementation = "test_wlroots.mouse_click"
+
+[[tests]]
+feature = "mouse_scroll"
+compositors = ["sway", "hyprland"]
+implementation_requirements = ["wayland_nonstandard"]
+implementation = "test_wlroots.mouse_scroll"
+failing_compositors = ["sway"]
+
+[[tests]]
+feature = "mouse_move_absolute"
+compositors = ["gnome"]
+implementation_requirements = ["desktop_portal"]
+implementation = "test_desktop_portal.mouse_move_absolute"
+failing_compositors = ["gnome"]
+
+# The features we implement in the above tests
+
+[[features]]
+name = "mouse_move_absolute"
+description = "Move the mouse cursor to an absolute position"
+
+[[features]]
+name = "mouse_click"
+description = "Emulate left, right, and middle mouse clicks"
+
+[[features]]
+name = "mouse_scroll"
+description = "Send mouse scrollwheel events"
