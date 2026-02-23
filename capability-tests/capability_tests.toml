@@ -27,6 +27,12 @@ compositors = ["gnome", "kde"]
 implementation_requirements = ["desktop_portal"]
 implementation = "test_desktop_portal.mouse_move_absolute"
 
+[[tests]]
+feature = "mouse_click"
+compositors = ["gnome", "kde"]
+implementation_requirements = ["desktop_portal"]
+implementation = "test_desktop_portal.mouse_click"
+
 # The features we implement in the above tests
 
 [[features]]

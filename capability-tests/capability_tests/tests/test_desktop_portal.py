@@ -17,8 +17,7 @@ from capability_tests.qemu import TestRunnerCommands
 
 async def mouse_move_absolute(
     dbus_client: MessageBus,
-    window_factory: callable,
-    runner_commands: TestRunnerCommands
+    window_factory: callable
 ):
     remote_desktop, monitor_stream_id, session_handle = await _build_remote_desktop_connection(
         dbus_client
@@ -49,6 +48,41 @@ async def mouse_move_absolute(
 
     assert xdiff1 == xdiff2
     assert ydiff1 == ydiff2
+
+
+async def mouse_click(dbus_client: MessageBus, window_factory: callable):
+    remote_desktop, monitor_stream_id, session_handle = await _build_remote_desktop_connection(
+        dbus_client
+    )
+
+    with window_factory() as window:
+        # Make sure we're on top of the window
+        await remote_desktop.call_notify_pointer_motion_absolute(
+            session_handle,
+            {},
+            monitor_stream_id,
+            100,
+            100
+        )
+        for button in (272, 273, 274):
+            for button_state in (1, 0):
+                await remote_desktop.call_notify_pointer_button(
+                    session_handle,
+                    {},
+                    button,
+                    button_state
+                )
+
+    events = [
+        e["button"] + "." + e["state"]
+        for e in window.events if e["type"] == "wl_pointer.button"
+    ]
+    expected = [
+        b + "." + s
+        for b in ("left", "right", "middle")
+        for s in ("pressed", "released")
+    ]
+    assert events == expected
 
 
 async def _build_remote_desktop_connection(dbus_client: MessageBus):
