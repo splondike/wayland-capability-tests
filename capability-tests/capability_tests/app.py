@@ -61,22 +61,11 @@ def debug_dbus_list(path_segment: List[str] = typer.Argument(default=None)):
     """
     path_segment = path_segment or []
 
-    async def get_proxy_object(bus, namespace, path):
-        definition = await bus.introspect(
-            namespace,
-            path
-        )
-        return bus.get_proxy_object(
-            namespace,
-            path,
-            definition
-        )
-
     async def inner():
         bus = await MessageBus().connect()
         if len(path_segment) == 0:
             # List out all the top level namespaces
-            obj = await get_proxy_object(
+            obj = await _dbus_get_proxy_object(
                 bus,
                 "org.freedesktop.DBus",
                 "/org/freedesktop/DBus"
@@ -96,7 +85,7 @@ def debug_dbus_list(path_segment: List[str] = typer.Argument(default=None)):
                     path = path_stack.pop()
                 else:
                     break
-                obj = await get_proxy_object(
+                obj = await _dbus_get_proxy_object(
                     bus,
                     path_segment[0],
                     path or "/"
@@ -114,7 +103,7 @@ def debug_dbus_list(path_segment: List[str] = typer.Argument(default=None)):
                 print(path)
         elif len(path_segment) == 2:
             # List out the interfaces within the object path
-            obj = await get_proxy_object(
+            obj = await _dbus_get_proxy_object(
                 bus,
                 path_segment[0],
                 path_segment[1]
@@ -126,7 +115,7 @@ def debug_dbus_list(path_segment: List[str] = typer.Argument(default=None)):
                 print(name)
         elif len(path_segment) == 3:
             # List out the methods and properties within the interface
-            obj = await get_proxy_object(
+            obj = await _dbus_get_proxy_object(
                 bus,
                 path_segment[0],
                 path_segment[1]
@@ -168,6 +157,33 @@ def debug_dbus_list(path_segment: List[str] = typer.Argument(default=None)):
 
 
 @app.command()
+def debug_dbus_permission_store(secret_name: List[str] = typer.Argument(default=None)):
+    """
+    List and view secrets from the RemoteDesktop Dbus permission store
+    (an implementation detail shared between GNOME and KDE at least).
+    """
+
+    async def inner():
+        nonlocal secret_name
+        dbus_client = await MessageBus().connect()
+        obj = await _dbus_get_proxy_object(
+            dbus_client,
+            "org.freedesktop.impl.portal.PermissionStore",
+            "/org/freedesktop/impl/portal/PermissionStore"
+        )
+        ps = obj.get_interface("org.freedesktop.impl.portal.PermissionStore")
+        table = "remote-desktop"
+        if secret_name is None:
+            for secret_name in (await ps.call_list(table)):
+                print(secret_name)
+        else:
+            data = await ps.call_lookup(table, secret_name[0])
+            print(data)
+
+    asyncio.run(inner())
+
+
+@app.command()
 def debug_wayland_list():
     """
     Lists the Wayland protocols supported by the current Wayland compositor.
@@ -202,9 +218,7 @@ def tests_run(
     )
 
     def window_factory() -> wayland_client_module.Window:
-        return wayland_client_module.Window(
-            wayland_client
-        )
+        return wayland_client_module.Window(wayland_client)
 
     async def inner():
         dbus_client = await MessageBus().connect()
@@ -414,3 +428,15 @@ def _format_table(data, header=None, pad_chars=None) -> List[str]:
         rtn.append(" ".join(out))
 
     return rtn
+
+
+async def _dbus_get_proxy_object(bus, namespace, path):
+    definition = await bus.introspect(
+        namespace,
+        path
+    )
+    return bus.get_proxy_object(
+        namespace,
+        path,
+        definition
+    )

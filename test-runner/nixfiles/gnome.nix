@@ -9,6 +9,12 @@ let
       services.xserver.desktopManager.gnome.debug = true;
       # Pick the wayland session version not gnome-xorg
       services.displayManager.defaultSession = "gnome";
+
+      # To disable installing GNOME's suite of applications
+      # and only be left with GNOME shell.
+      services.gnome.core-apps.enable = false;
+      services.gnome.core-developer-tools.enable = false;
+      services.gnome.games.enable = false;
     };
   };
 in result

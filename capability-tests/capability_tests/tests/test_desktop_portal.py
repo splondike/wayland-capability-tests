@@ -67,6 +67,7 @@ async def _build_remote_desktop_connection(dbus_client: MessageBus):
     REMOTE_DESKTOP_RESTORE_TOKEN = "9c437d05-3e48-4f8e-81d6-cea0001564ff"
 
     # First pre-authorize our remote desktop session
+    compositor_name = await _detect_compositor_name(dbus_client)
     obj = await get_proxy_object(
         dbus_client,
         "org.freedesktop.impl.portal.PermissionStore",
@@ -76,8 +77,15 @@ async def _build_remote_desktop_connection(dbus_client: MessageBus):
     table = "remote-desktop"
     if REMOTE_DESKTOP_RESTORE_TOKEN not in (await ps.call_list(table)):
         # I worked out this value by first allowing the auth dialog to pop up,
-        # then looking at what value was saved in the PermissionStore (see e.g.
-        # call_lookup on the above ps object)
+        # then looking at what value was saved in the PermissionStore. See
+        # the debug_dbus_permission_store command in app.py
+        token_value = None
+        if compositor_name == "gnome":
+            token_value = ("GNOME", 1, Variant("(xxuba(uuv))", (0, 1, 7, False, [
+                (0, 1, Variant("s", "RHT:QEMU Monitor:0x00000000"))
+            ])))
+        else:
+            token_value = ("KDE", 1, Variant("ay", b"\x00\x00\x00\x02\x00\x00\x00\x0e\x00d\x00e\x00v\x00i\x00c\x00e\x00s\x00\x00\x00\x03\x00\x00\x00\x00\x03\x00\x00\x00$\x00s\x00c\x00r\x00e\x00e\x00n\x00S\x00h\x00a\x00r\x00e\x00E\x00n\x00a\x00b\x00l\x00e\x00d\x00\x00\x00\x01\x00\x01"))
         await ps.call_set(
             table,
             True,
@@ -85,9 +93,7 @@ async def _build_remote_desktop_connection(dbus_client: MessageBus):
             {"": ["yes"]},
             Variant(
                 "(suv)",
-                ("GNOME", 1, Variant("(xxuba(uuv))", (0, 1, 7, False, [
-                    (0, 1, Variant("s", "RHT:QEMU Monitor:0x00000000"))
-                ])))
+                token_value
             )
         )
 
@@ -110,11 +116,19 @@ async def _build_remote_desktop_connection(dbus_client: MessageBus):
     sc = obj.get_interface("org.freedesktop.portal.ScreenCast")
     await sc.call_select_sources(session_handle, {})
 
+    select_devices_request_token, select_devices_future = await create_request_future(
+        dbus_client
+    )
     options = {
         "persist_mode": Variant("u", 2),
-        "restore_token": Variant('s', REMOTE_DESKTOP_RESTORE_TOKEN)
+        "restore_token": Variant("s", REMOTE_DESKTOP_RESTORE_TOKEN),
+        "handle_token": Variant("s", select_devices_request_token),
+        # TODO: Types should not be required according to the spec,
+        # but KDE's portal implementation currently requires it
+        "types": Variant("u", 2 | 1),
     }
     await rd.call_select_devices(session_handle, options)
+    await select_devices_future
 
     start_request_token, start_future = await create_request_future(
         dbus_client
@@ -122,9 +136,27 @@ async def _build_remote_desktop_connection(dbus_client: MessageBus):
     await rd.call_start(session_handle, "", {
         "handle_token": Variant("s", start_request_token),
     })
-    monitor_stream_id, _ = (await start_future)["streams"].value[0]
+    start_result = await start_future
+    monitor_stream_id, _ = start_result["streams"].value[0]
 
     return rd, monitor_stream_id, session_handle
+
+async def _detect_compositor_name(dbus_client: MessageBus):
+    obj = await get_proxy_object(
+        dbus_client,
+        "org.freedesktop.DBus",
+        "/org/freedesktop/DBus"
+    )
+    interface = obj.get_interface("org.freedesktop.DBus")
+    for namespace in sorted(await interface.call_list_names()):
+        if namespace == "org.kde.plasmashell":
+            return "kde"
+        elif namespace == "org.gnome.Shell":
+            return "gnome"
+
+    raise RuntimeError(
+        "Couldn't find known compositor dbus namespace"
+    )
 
 
 async def create_request_future(
