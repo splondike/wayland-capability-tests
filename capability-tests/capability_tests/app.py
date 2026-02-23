@@ -286,6 +286,11 @@ def tests_run(
                 failed_tests.append((test["implementation"], e))
                 passed = False
 
+            # Reset the DBus connection for the next test so we get a new
+            # identity on the bus
+            dbus_client.disconnect()
+            dbus_client = await MessageBus().connect()
+
             print(" PASS" if passed else " FAIL")
 
         if failed_tests:
