@@ -5,19 +5,21 @@ feature = "mouse_move_absolute"
 compositors = ["sway", "hyprland"]
 implementation_requirements = ["wayland_nonstandard"]
 implementation = "test_wlroots.mouse_move_absolute"
+failing_compositors = ["hyprland"]
 
 [[tests]]
 feature = "mouse_click"
 compositors = ["sway", "hyprland"]
 implementation_requirements = ["wayland_nonstandard"]
 implementation = "test_wlroots.mouse_click"
+failing_compositors = ["hyprland"]
 
 [[tests]]
 feature = "mouse_scroll"
 compositors = ["sway", "hyprland"]
 implementation_requirements = ["wayland_nonstandard"]
 implementation = "test_wlroots.mouse_scroll"
-failing_compositors = ["sway"]
+failing_compositors = ["sway", "hyprland"]
 
 [[tests]]
 feature = "mouse_move_absolute"
