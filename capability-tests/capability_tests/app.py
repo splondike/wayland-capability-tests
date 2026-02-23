@@ -274,6 +274,11 @@ def tests_run(
                     else:
                         msg = f" Unhandled implementation arg name: {name}"
                         assert False, msg
+
+                # Need to press escape prior to test to ensure GNOME isn't in
+                # the 'expose' mode. Doesn't hurt other compositors.
+                runner_commands.send_key("esc")
+
                 result = func(*args)
                 if inspect.isawaitable(result):
                     await result

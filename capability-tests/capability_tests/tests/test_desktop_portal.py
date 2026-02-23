@@ -20,19 +20,12 @@ async def mouse_move_absolute(
     window_factory: callable,
     runner_commands: TestRunnerCommands
 ):
-    # Need to press escape prior to test to ensure GNOME isn't in the 'expose'
-    # mode
-    runner_commands.send_key("esc")
-
     remote_desktop, monitor_stream_id, session_handle = await _build_remote_desktop_connection(
         dbus_client
     )
 
-    # TODO: This only seems to move the pointer once, regardless of sleep time
-    # Am I being expected to do some callback after each call or something like
-    # that?
     with window_factory() as window:
-        for pos in range(100, 150, 100):
+        for pos in range(100, 150, 10):
             await remote_desktop.call_notify_pointer_motion_absolute(
                 session_handle,
                 {},
