@@ -4,6 +4,7 @@ let
     ssh_key = ssh_key;
     user_password = user_password;
     user_id = builtins.fromJSON host_user_id;
+    hostname = "gnome";
     overrides = {
       services.xserver.desktopManager.gnome.enable = true;
       services.xserver.desktopManager.gnome.debug = true;

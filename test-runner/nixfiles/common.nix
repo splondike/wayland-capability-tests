@@ -1,4 +1,4 @@
-{ ssh_key, user_password, user_id, overrides }:
+{ ssh_key, user_password, user_id, hostname, overrides }:
 let
   nixosVersion = "25.05";
   # use nix-build --tarball-ttl <lots of seconds> to use the cache for longer.
@@ -8,6 +8,7 @@ let
     overlays = [];
   };
   baseVmOptions = {
+    networking.hostName = hostname;
     system.stateVersion = nixosVersion;
     users.users.root.password = user_password;
     users.users.root.openssh.authorizedKeys.keys = [

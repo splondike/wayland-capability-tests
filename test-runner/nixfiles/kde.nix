@@ -4,6 +4,7 @@ let
     ssh_key = ssh_key;
     user_password = user_password;
     user_id = builtins.fromJSON host_user_id;
+    hostname = "kde";
     overrides = {
       services.desktopManager.plasma6.enable = true;
       services.displayManager.defaultSession = "plasma";

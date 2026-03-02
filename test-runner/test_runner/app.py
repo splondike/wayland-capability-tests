@@ -244,7 +244,9 @@ def _start_qemu(
     ssh_port = str(_calculate_free_port())
 
     nix_disk_image = vm_dir / NIX_VM_DISK_IMAGE
-    script_path = result_dir / "bin" / "run-nixos-vm"
+    # Changing the hosname of the VMs changes the name of this link
+    # so just grab the first one matching the glob.
+    script_path = next((result_dir / "bin").glob("run-*"))
 
     # Socket for the Qemu monitor to listen on
     monitor_socket_path.unlink(missing_ok=True)
