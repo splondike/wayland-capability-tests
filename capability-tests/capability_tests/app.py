@@ -50,110 +50,12 @@ def debug_show_window(seconds_open: int = 2):
 
 
 @app.command()
-def debug_dbus_list(path_segment: List[str] = typer.Argument(default=None)):
+def debug_dbus_list():
     """
-    Prints out available DBus services. These form a tree: namespace,
-    object path, interface, methods/properties . If you supply a single
-    argument for each of those levels it will print the next level down.
-
-    e.g. dbug-dbus-list org.freedesktop.systemd1 /org/freedesktop/LogControl1
-    would print all the interfaces in that namespace + object path
+    Use qdbus binary to inspect and execute DBus commands.
     """
-    path_segment = path_segment or []
 
-    async def inner():
-        bus = await MessageBus().connect()
-        if len(path_segment) == 0:
-            # List out all the top level namespaces
-            obj = await _dbus_get_proxy_object(
-                bus,
-                "org.freedesktop.DBus",
-                "/org/freedesktop/DBus"
-            )
-            interface = obj.get_interface("org.freedesktop.DBus")
-            for namespace in sorted(await interface.call_list_names()):
-                if namespace.startswith(":"):
-                    # These ones aren't useful to show
-                    continue
-                print(namespace)
-        elif len(path_segment) == 1:
-            # List out the object paths within the namespace
-            all_paths = []
-            path_stack = [""]
-            while True:
-                if len(path_stack) > 0:
-                    path = path_stack.pop()
-                else:
-                    break
-                obj = await _dbus_get_proxy_object(
-                    bus,
-                    path_segment[0],
-                    path or "/"
-                )
-                pending_paths = []
-                for node in obj.introspection.nodes:
-                    pending_paths.append(path + "/" + node.name)
-
-                if len(pending_paths) > 0:
-                    path_stack += pending_paths
-                else:
-                    all_paths += [path]
-
-            for path in sorted(all_paths):
-                print(path)
-        elif len(path_segment) == 2:
-            # List out the interfaces within the object path
-            obj = await _dbus_get_proxy_object(
-                bus,
-                path_segment[0],
-                path_segment[1]
-            )
-            for name in sorted([
-                interface.name
-                for interface in obj.introspection.interfaces
-            ]):
-                print(name)
-        elif len(path_segment) == 3:
-            # List out the methods and properties within the interface
-            obj = await _dbus_get_proxy_object(
-                bus,
-                path_segment[0],
-                path_segment[1]
-            )
-            for interface in obj.introspection.interfaces:
-                if interface.name == path_segment[2]:
-                    # The type signature notation is defined here
-                    # https://dbus.freedesktop.org/doc/dbus-specification.html#type-system
-                    # Happy for somebody to decode that to something more
-                    # readable if desired.
-
-                    print("The letters after the names below specify the type of the name:\n")
-                    print(
-                        "\n".join([
-                            "b = boolean",
-                            "u = unsigned number",
-                            "s = string",
-                            "o = dbus object path (string)",
-                            "v = dynamic type",
-                            "ax = array of x",
-                            "{xy} = map from x to y",
-                            "(xyz) = tuple with xyz as members"
-                        ])
-                    )
-                    print("\nSee https://dbus.freedesktop.org/doc/dbus-specification.html#type-system for a full explanation.\n")
-
-                    print("# Methods:\n")
-                    for method in interface.methods:
-                        print(method.name)
-                        for arg in method.in_args:
-                            print("  input", arg.name, arg.type.signature)
-                        for arg in method.out_args:
-                            print("  output", arg.name, arg.type.signature)
-                    print("\n# Properties:\n")
-                    for property in interface.properties:
-                        print(property.name, property.signature)
-
-    asyncio.run(inner())
+    print("Use the qdbus command instead")
 
 
 @app.command()

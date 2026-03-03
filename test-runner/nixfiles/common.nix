@@ -27,6 +27,7 @@ let
       python313
       poetry
       git
+      kdePackages.qttools
     ];
 
     services.xserver.enable = true;

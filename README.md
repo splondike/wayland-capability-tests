@@ -22,11 +22,15 @@ nix-shell --run "vncviewer ViewOnly=true localhost:5900"
 
 ## Debugging
 
+You can use `ct debug-wayland-list` to list out all available Wayland protocols.
+
 The Wayland client library we're using accepts the `WAYLAND_DEBUG=1` env var to print more output.
 
 If that's not enough you can also make use of various [helper applications](https://wayland.freedesktop.org/extras.html) that print out all events received and requests sent.
 
 I've been using [wlanalyzer](https://github.com/blessed/wlanalyzer), which was a little annoying to build, but supports Python unlike `wayland-tracer`. I haven't figured out how Nix works enough to install this in the VM yet.
+
+For DBus you can use the `qdbus` binary to list out available namespaces/interfaces/methods and execute them.
 
 # Why build this?
 
