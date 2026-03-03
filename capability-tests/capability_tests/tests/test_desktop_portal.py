@@ -85,6 +85,33 @@ async def mouse_click(dbus_client: MessageBus, window_factory: callable):
     assert events == expected
 
 
+async def mouse_scroll(dbus_client: MessageBus, window_factory: callable):
+    remote_desktop, monitor_stream_id, session_handle = await _build_remote_desktop_connection(
+        dbus_client
+    )
+    with window_factory() as window:
+        # Make sure we're on top of the window
+        await remote_desktop.call_notify_pointer_motion_absolute(
+            session_handle,
+            {},
+            monitor_stream_id,
+            100,
+            100
+        )
+
+        # Send scroll event
+        await remote_desktop.call_notify_pointer_axis_discrete(
+            session_handle,
+            {},
+            0,
+            5
+        )
+
+    # mouse scroll
+    events = window.events_of_type("wl_pointer.axis")
+    assert len(events) > 0
+
+
 async def _build_remote_desktop_connection(dbus_client: MessageBus):
     # Normally you have to click a button to authorize an application to
     # use the RemoteDesktop protocols. Having to click this auth dialog is

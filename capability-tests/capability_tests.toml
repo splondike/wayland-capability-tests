@@ -33,6 +33,12 @@ compositors = ["gnome", "kde"]
 implementation_requirements = ["desktop_portal"]
 implementation = "test_desktop_portal.mouse_click"
 
+[[tests]]
+feature = "mouse_scroll"
+compositors = ["gnome", "kde"]
+implementation_requirements = ["desktop_portal"]
+implementation = "test_desktop_portal.mouse_scroll"
+
 # The features we implement in the above tests
 
 [[features]]
