@@ -7,109 +7,87 @@ import asyncio
 import random
 import time
 from typing import Tuple
+from functools import partial
 
 import dbus_fast.introspection
 from dbus_fast.service import Variant
 from dbus_fast.aio import MessageBus
 
 from capability_tests.qemu import TestRunnerCommands
+from capability_tests.tests import common_tests
 
 
 async def mouse_move_absolute(
     dbus_client: MessageBus,
     window_factory: callable
 ):
-    remote_desktop, monitor_stream_id, session_handle = await _build_remote_desktop_connection(
+    remote_desktop_objs = await _build_remote_desktop_connection(
         dbus_client
     )
 
-    with window_factory() as window:
-        for pos in range(100, 150, 10):
-            await remote_desktop.call_notify_pointer_motion_absolute(
-                session_handle,
-                {},
-                monitor_stream_id,
-                pos,
-                pos
-            )
-            time.sleep(0.1)
-
-    # mouse move events
-    events = [
-        e
-        for e in window.events if e["type"] == "wl_pointer.motion"
-    ][:3]
-    assert len(events) >= 3
-
-    xdiff1 = events[-2]["x"] - events[-3]["x"]
-    xdiff2 = events[-1]["x"] - events[-2]["x"]
-    ydiff1 = events[-2]["y"] - events[-3]["y"]
-    ydiff2 = events[-1]["y"] - events[-2]["y"]
-
-    assert xdiff1 == xdiff2
-    assert ydiff1 == ydiff2
+    await common_tests.mouse_move_absolute(
+        window_factory,
+        partial(_mouse_move_absolute, remote_desktop_objs)
+    )
 
 
 async def mouse_click(dbus_client: MessageBus, window_factory: callable):
-    remote_desktop, monitor_stream_id, session_handle = await _build_remote_desktop_connection(
+    remote_desktop_objs = await _build_remote_desktop_connection(
         dbus_client
     )
 
-    with window_factory() as window:
-        # Make sure we're on top of the window
-        await remote_desktop.call_notify_pointer_motion_absolute(
-            session_handle,
+    async def _mouse_click(button: str, state: str):
+        button_code = {
+            "left": 272,
+            "right": 273,
+            "middle": 274,
+        }[button]
+        state_code = {
+            "pressed": 1,
+            "released": 0,
+        }[state]
+        await remote_desktop_objs["remote_desktop"].call_notify_pointer_button(
+            remote_desktop_objs["session_handle"],
             {},
-            monitor_stream_id,
-            100,
-            100
+            button_code,
+            state_code
         )
-        for button in (272, 273, 274):
-            for button_state in (1, 0):
-                await remote_desktop.call_notify_pointer_button(
-                    session_handle,
-                    {},
-                    button,
-                    button_state
-                )
 
-    events = [
-        e["button"] + "." + e["state"]
-        for e in window.events if e["type"] == "wl_pointer.button"
-    ]
-    expected = [
-        b + "." + s
-        for b in ("left", "right", "middle")
-        for s in ("pressed", "released")
-    ]
-    assert events == expected
+    await common_tests.mouse_click(
+        window_factory,
+        partial(_mouse_move_absolute, remote_desktop_objs),
+        _mouse_click
+    )
 
 
 async def mouse_scroll(dbus_client: MessageBus, window_factory: callable):
-    remote_desktop, monitor_stream_id, session_handle = await _build_remote_desktop_connection(
+    remote_desktop_objs = await _build_remote_desktop_connection(
         dbus_client
     )
-    with window_factory() as window:
-        # Make sure we're on top of the window
-        await remote_desktop.call_notify_pointer_motion_absolute(
-            session_handle,
-            {},
-            monitor_stream_id,
-            100,
-            100
-        )
 
-        # Send scroll event
-        await remote_desktop.call_notify_pointer_axis_discrete(
-            session_handle,
+    async def _mouse_scroll():
+        await remote_desktop_objs["remote_desktop"].call_notify_pointer_axis_discrete(
+            remote_desktop_objs["session_handle"],
             {},
             0,
             5
         )
 
-    # mouse scroll
-    events = window.events_of_type("wl_pointer.axis")
-    assert len(events) > 0
+    await common_tests.mouse_scroll(
+        window_factory,
+        partial(_mouse_move_absolute, remote_desktop_objs),
+        _mouse_scroll
+    )
+
+
+async def _mouse_move_absolute(remote_desktop_objs: dict, xpos: int, ypos: int):
+    await remote_desktop_objs["remote_desktop"].call_notify_pointer_motion_absolute(
+        remote_desktop_objs["session_handle"],
+        {},
+        remote_desktop_objs["monitor_stream_id"],
+        xpos,
+        ypos
+    )
 
 
 async def _build_remote_desktop_connection(dbus_client: MessageBus):
@@ -193,7 +171,11 @@ async def _build_remote_desktop_connection(dbus_client: MessageBus):
     start_result = await start_future
     monitor_stream_id, _ = start_result["streams"].value[0]
 
-    return rd, monitor_stream_id, session_handle
+    return {
+        "remote_desktop": rd,
+        "monitor_stream_id": monitor_stream_id,
+        "session_handle": session_handle
+    }
 
 async def _detect_compositor_name(dbus_client: MessageBus):
     obj = await get_proxy_object(
