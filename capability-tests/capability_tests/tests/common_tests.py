@@ -59,3 +59,18 @@ async def mouse_scroll(window_factory: callable, mouse_move: callable, mouse_scr
 
     events = window.events_of_type("wl_pointer.axis")
     assert len(events) > 0
+
+
+async def keyboard_press(window_factory: callable, keypress: callable):
+    with window_factory() as window:
+        await keypress("pressed", 17) # ctrl
+        await keypress("pressed", 65) # a
+        await keypress("released", 65) # a
+        await keypress("released", 17) # ctrl
+
+    events = [
+        f"{event['key']}.{event['state']}"
+
+        for event in window.events_of_type("wl_keyboard.key")
+    ]
+    assert events == ["17.pressed", "65.pressed", "65.released", "17.released"]

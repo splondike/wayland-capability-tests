@@ -80,6 +80,25 @@ async def mouse_scroll(dbus_client: MessageBus, window_factory: callable):
     )
 
 
+async def keyboard_press(dbus_client: MessageBus, window_factory: callable):
+    remote_desktop_objs = await _build_remote_desktop_connection(
+        dbus_client
+    )
+
+    async def _keypress(state: str, code: int):
+        await remote_desktop_objs["remote_desktop"].call_notify_keyboard_keycode(
+            remote_desktop_objs["session_handle"],
+            {},
+            code,
+            1 if state == "pressed" else 0
+        )
+
+    await common_tests.keyboard_press(
+        window_factory,
+        _keypress
+    )
+
+
 async def _mouse_move_absolute(remote_desktop_objs: dict, xpos: int, ypos: int):
     await remote_desktop_objs["remote_desktop"].call_notify_pointer_motion_absolute(
         remote_desktop_objs["session_handle"],

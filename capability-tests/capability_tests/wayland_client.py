@@ -231,6 +231,8 @@ class Window():
         width = 2*1920
         height = 2*1080
         fd, obj = self.client.make_shared_memory(4*width*height)
+        self.garbage_collection_calls.append(lambda: os.close(fd))
+        self.garbage_collection_calls.append(obj.close)
         wl_shm = self.client.binding("wl_shm")
         pool = wl_shm.create_pool(fd, 4*width*height)
         self.garbage_collection_calls.append(pool.destroy)
@@ -270,6 +272,11 @@ class Window():
         )
         # TODO: See wl_seat.get_keyboard for receiving those
         # events
+        wl_keyboard = wl_seat.get_keyboard()
+        self._bind_event_tracker(
+            wl_keyboard.events.key,
+            self._track_wl_keyboard_key_events
+        )
 
         # At this point under Sway at least the window isn't visible, so
         # just wait a bit to let that happen. I don't think we get a
@@ -318,6 +325,13 @@ class Window():
                 273: "right",
                 274: "middle",
             }.get(button, f"unknown:{button}"),
+            "state": state.name
+        })
+
+    def _track_wl_keyboard_key_events(self, serial, time, key, state):
+        self.events.append({
+            "type": "wl_keyboard.key",
+            "key": key,
             "state": state.name
         })
 
