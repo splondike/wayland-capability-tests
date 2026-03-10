@@ -45,6 +45,15 @@ compositors = ["gnome", "kde"]
 implementation_requirements = ["desktop_portal"]
 implementation = "test_desktop_portal.keyboard_press"
 
+[[tests]]
+feature = "clipboard"
+compositors = ["gnome"]
+implementation_requirements = ["wayland_stable"]
+implementation = "test_wayland_core.clipboard"
+caveats = "Requires the application to have a focussed window to set or get the clipboard contents"
+
+# Other notes: remotedesktop has a clipboard implementation. There's the ext-data-control Wayland protocol for clipboard managers too.
+
 # The features we implement in the above tests
 
 [[features]]

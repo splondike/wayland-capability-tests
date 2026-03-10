@@ -99,6 +99,26 @@ async def keyboard_press(dbus_client: MessageBus, window_factory: callable):
     )
 
 
+async def clipboard(dbus_client: MessageBus, window_factory: callable):
+    # TODO: This seems to permanently break the DBus daemon under GNOME...
+    # https://wayland.app/protocols/wayland#wl_data_device_manager
+    remote_desktop_objs = await _build_remote_desktop_connection(
+        dbus_client
+    )
+    clip = remote_desktop_objs["clipboard"]
+    await clip.call_set_selection(
+        remote_desktop_objs["session_handle"],
+        {
+            "mime_types": Variant("as", ["text/plain"])
+        }
+    )
+    fd = await clip.call_selection_read(
+        remote_desktop_objs["session_handle"],
+        "text/plain"
+    )
+    print(fd)
+
+
 async def _mouse_move_absolute(remote_desktop_objs: dict, xpos: int, ypos: int):
     await remote_desktop_objs["remote_desktop"].call_notify_pointer_motion_absolute(
         remote_desktop_objs["session_handle"],
@@ -132,7 +152,7 @@ async def _build_remote_desktop_connection(dbus_client: MessageBus):
         # the debug_dbus_permission_store command in app.py
         token_value = None
         if compositor_name == "gnome":
-            token_value = ("GNOME", 1, Variant("(xxuba(uuv))", (0, 1, 7, False, [
+            token_value = ("GNOME", 1, Variant("(xxuba(uuv))", (0, 1772661117766466, 3, True, [
                 (0, 1, Variant("s", "RHT:QEMU Monitor:0x00000000"))
             ])))
         else:
@@ -167,6 +187,9 @@ async def _build_remote_desktop_connection(dbus_client: MessageBus):
     sc = obj.get_interface("org.freedesktop.portal.ScreenCast")
     await sc.call_select_sources(session_handle, {})
 
+    clip = obj.get_interface("org.freedesktop.portal.Clipboard")
+    await clip.call_request_clipboard(session_handle, {})
+
     select_devices_request_token, select_devices_future = await create_request_future(
         dbus_client
     )
@@ -192,6 +215,7 @@ async def _build_remote_desktop_connection(dbus_client: MessageBus):
 
     return {
         "remote_desktop": rd,
+        "clipboard": clip,
         "monitor_stream_id": monitor_stream_id,
         "session_handle": session_handle
     }

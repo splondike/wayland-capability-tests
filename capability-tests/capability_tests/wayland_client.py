@@ -270,8 +270,6 @@ class Window():
             wl_pointer.events.button,
             self._track_wl_pointer_button_events
         )
-        # TODO: See wl_seat.get_keyboard for receiving those
-        # events
         wl_keyboard = wl_seat.get_keyboard()
         self._bind_event_tracker(
             wl_keyboard.events.key,

@@ -67,6 +67,8 @@ async def keyboard_press(window_factory: callable, keypress: callable):
         await keypress("pressed", 65) # a
         await keypress("released", 65) # a
         await keypress("released", 17) # ctrl
+        # GNOME needs a little sleep here
+        time.sleep(0.1)
 
     events = [
         f"{event['key']}.{event['state']}"
