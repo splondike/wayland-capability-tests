@@ -109,7 +109,8 @@ def debug_wayland_list():
 def tests_run(
     ids: List[str] = typer.Argument(default=None),
     compositor: Optional[str] = None,
-    compositor_skip_failing: bool = False
+    compositor_skip_failing: bool = False,
+    rerun_count: int = 1
 ):
     """
     Run the tests matching the given filters. ids should
@@ -143,7 +144,7 @@ def tests_run(
                 ) and
                 (ids is None or test["implementation"] in ids)
             )
-        ]
+        ] * rerun_count
         name_prefixes = _format_table([
             [test["implementation"] + " ..."]
             for test in tests
