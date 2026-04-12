@@ -9,6 +9,7 @@ import mmap
 import struct
 import time
 import tempfile
+import threading
 from typing import Tuple
 
 from wayland.proxy import Proxy
@@ -22,7 +23,22 @@ class WaylandClient():
     Wayland client for communicating with a compositor.
 
     Wrapper around the python-wayland library to give some convenience
-    methods.
+    methods, including one to handle race conditions with
+    setting up event listeners.
+
+    python-wayland from version 1.0 uses a background thread to queue
+    events. If an event listener isn't set up before the event fires
+    then it may be dropped. It isn't always possible to do this, e.g.
+    for the wl_display.sync() event where you register the event listener
+    on the object returned from the sync() call and the compositor could
+    send its response before you get a chance to do that. To handle this
+    use:
+
+    ```
+    with client.event_callback_lock():
+        obj = wl_display.sync()
+        obj.events.done += my_handler
+    ```
     """
 
     def __init__(self, protocols_dir: str):
@@ -32,9 +48,16 @@ class WaylandClient():
         """
 
         self.wl = Proxy()
+        # Actual live instances of objects we call methods on
         self.bindings = {}
+        # A list of Wayland interfaces the compositor advertises
         self.available_interfaces = {}
-        self.wl.initialise(self.bindings, protocols_dir)
+        # Proxy classes derived entirely from protocols_dir. The only
+        # one of these you can call directly is wl_display
+        self.protocol_classes = {}
+        self.wl.initialise(self.protocol_classes)
+        self.bindings["wl_display"] = self.protocol_classes["wl_display"]()
+
         # The xdg_wm_base object periodically emits ping events which you
         # must reply to or be deemed inactive. Centralise handling that here.
         self.xdg_wm_base_ping_handler = False
@@ -49,8 +72,8 @@ class WaylandClient():
             # we may need in the future here
             def load_protocols(name, interface, version):
                 self.available_interfaces[interface] = (name, interface, version)
+            self.bindings["wl_registry"] = self.bindings["wl_display"].get_registry()
             self.bindings["wl_registry"].events.global_ += load_protocols
-            self.bindings["wl_display"].get_registry()
             self.sync()
             self.bindings["wl_registry"].events.global_ -= load_protocols
             # The Wayland server can send us error responses back. Log those
@@ -58,13 +81,13 @@ class WaylandClient():
             self.bindings["wl_display"].events.error += self._log_compositor_error
 
         for name in protocol_names:
-            if name not in self.bindings:
+            if name not in self.protocol_classes:
                 raise RuntimeError(
                     f"Your protocols_dir/protocols.json file doesn't have this protocol: {name}"
                 )
 
-            if self.bindings[name].object_id == 0:
-                self.bindings["wl_registry"].bind(*self.available_interfaces[name])
+            if name not in self.bindings:
+                self.bindings[name] = self.bindings["wl_registry"].bind(*self.available_interfaces[name])
 
     def sync(self, timeout=2000) -> None:
         """
@@ -77,8 +100,9 @@ class WaylandClient():
             nonlocal synced
             synced = True
         # Apparently the compositor will take care of garbage collecting this sync object on its end
-        sync_obj = self.bindings["wl_display"].sync()
-        sync_obj.events.done += sync_done
+        with self.event_callback_lock():
+            sync_obj = self.bindings["wl_display"].sync()
+            sync_obj.events.done += sync_done
 
         poll_interval = 10
         for _ in range(timeout // poll_interval):
@@ -106,12 +130,23 @@ class WaylandClient():
             xdg_wm_base.events.ping += ping_handler
         return self.bindings[name]
 
+    def event_callback_lock(self) -> threading.Lock:
+        """
+        Returns a lock which you can use to stall processing of
+        messages from the compositor. Useful when you need to
+        set up an event handler for an object you've just created.
+        """
+
+        wl_lib_state = self.bindings["wl_display"]._DynamicObject__state
+        wl_lib_state.connect()
+        return wl_lib_state._socket.buffer_lock
+
     def process_messages(self):
         """
         Flush all queued messages from the compositor.
         """
 
-        self.wl.state.process_messages()
+        self.bindings["wl_display"].dispatch_timeout(0.05)
 
     def make_shared_memory(self, size) -> Tuple[int, mmap.mmap]:
         """
@@ -207,21 +242,25 @@ class Window():
 
         wl_surface = self.client.binding("wl_compositor").create_surface()
         self.garbage_collection_calls.append(wl_surface.destroy)
-        xdg_surface = self.client.binding("xdg_wm_base").get_xdg_surface(wl_surface)
-        self.garbage_collection_calls.append(xdg_surface.destroy)
-        xdg_toplevel = xdg_surface.get_toplevel()
-        self.garbage_collection_calls.append(xdg_toplevel.destroy)
+
+        with self.client.event_callback_lock():
+            xdg_surface = self.client.binding("xdg_wm_base").get_xdg_surface(wl_surface)
+            # Automatically acknowledge any xdg_surface.configure events
+            def _ack_xdg_surface_configure_events(serial):
+                xdg_surface.ack_configure(serial)
+            xdg_surface.events.configure += _ack_xdg_surface_configure_events
+            # We also need to wait for the first one
+            configure_listener = WaylandEventWatcher(self.client)
+            xdg_surface.events.configure += configure_listener
+            self.garbage_collection_calls.append(xdg_surface.destroy)
+            xdg_toplevel = xdg_surface.get_toplevel()
+            self.garbage_collection_calls.append(xdg_toplevel.destroy)
+
         xdg_toplevel.set_title("wayland_capability_tests_title")
         xdg_toplevel.set_app_id("wayland_capability_tests_title_app_id")
         wl_surface.commit()
 
-        # Automatically acknowledge any xdg_surface.configure events
-        def _ack_xdg_surface_configure_events(serial):
-            xdg_surface.ack_configure(serial)
-        xdg_surface.events.configure += _ack_xdg_surface_configure_events
-        # We also need to wait for the first one before continuing
-        configure_listener = WaylandEventWatcher(self.client)
-        xdg_surface.events.configure += configure_listener
+        # Wait for compositor to acknowledge everything
         configure_listener.await_first_event()
         xdg_surface.events.configure -= configure_listener
 
@@ -270,8 +309,6 @@ class Window():
             wl_pointer.events.button,
             self._track_wl_pointer_button_events
         )
-        # TODO: See wl_seat.get_keyboard for receiving those
-        # events
         wl_keyboard = wl_seat.get_keyboard()
         self._bind_event_tracker(
             wl_keyboard.events.key,
@@ -313,7 +350,10 @@ class Window():
     def _track_wl_pointer_axis_events(self, time, axis, value):
         self.events.append({
             "type": "wl_pointer.axis",
-            "axis": axis.name,
+            "axis": {
+                0: "vertical_scroll",
+                1: "horizontal_scroll",
+            }.get(axis, f"unknown:{axis}"),
             "value": value
         })
 
@@ -325,14 +365,21 @@ class Window():
                 273: "right",
                 274: "middle",
             }.get(button, f"unknown:{button}"),
-            "state": state.name
+            "state": {
+                0: "released",
+                1: "pressed"
+            }.get(state, f"unknown:{state}")
         })
 
     def _track_wl_keyboard_key_events(self, serial, time, key, state):
         self.events.append({
             "type": "wl_keyboard.key",
             "key": key,
-            "state": state.name
+            "state": {
+                0: "released",
+                1: "pressed",
+                2: "repeated"
+            }.get(state, f"unknown:{state}")
         })
 
     def _track_xdg_toplevel_configure_events(self, width, height, states):
@@ -352,12 +399,7 @@ class Window():
             }
         }
 
-        diff = len(states) % 4
-        # I think there's a bug in python-wayland where it chops off the
-        # last byte. Deal with that.
-        states += b"\x00" * (4 - diff)
-        for i in range(len(states) // 4):
-            value = struct.unpack("I", states[i*4:i*4 + 4])[0]
+        for value in states:
             if value in properties:
                 result[properties[value]] = True
         self.events.append(result)

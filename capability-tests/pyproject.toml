@@ -8,7 +8,7 @@ package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.13"
-python-wayland = "^0.6.0"
+python-wayland = "^1.0.0"
 dbus-fast = "^3.1.2"
 typer = "^0.15.2"
 
